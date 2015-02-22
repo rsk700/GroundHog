@@ -32,6 +32,7 @@ import cPickle
 import gzip
 import time
 import signal
+from threading import Event
 
 from groundhog.utils import print_mem, print_time
 
@@ -110,6 +111,8 @@ class MainLoop(object):
         self.validate_postprocess = validate_postprocess
         self.patience = state['patience']
         self.l2_params = l2_params
+        self.stop_processing = False
+        self.stop_event = Event()
 
         self.train_cost = train_cost
 
@@ -257,6 +260,7 @@ class MainLoop(object):
 
     def main(self):
         assert self.reset == -1
+        assert not self.stop_event.is_set()
 
         print_mem('start')
         self.state['gotNaN'] = 0
@@ -346,6 +350,8 @@ class MainLoop(object):
                 self.timings['next_offset'] = self.train_data.next_offset
             except KeyboardInterrupt:
                 break
+            if self.stop_processing:
+                break
 
         self.state['wholetime'] = float(time.time() - start_time)
         if self.valid_data is not None:
@@ -359,3 +365,8 @@ class MainLoop(object):
         print "Average step took {}".format(avg_step)
         print "That amounts to {} sentences in a day".format(1 / avg_step * 86400 * self.state['bs'])
         print "Average log2 per example is {}".format(avg_cost2expl)
+        self.stop_event.set()
+
+    def stop(self):
+        self.stop_processing = True
+        return self.stop_event
